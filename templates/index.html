@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MSL Task Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>MSL Task Manager</h1>
+        <div class="user-info">
+            Welcome, <span id="current-username">{{ username }}</span>!
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <div class="task-list-panel">
+            <h2>Tasks</h2>
+            <div class="task-actions">
+                <input type="text" id="new-task-title" placeholder="New Task Title">
+                <button id="add-task-btn">Add Task</button>
+            </div>
+            <div class="task-filters">
+                Sort/Filter by:
+                <button class="filter-btn" data-filter="Filter_UI">Urgency/Importance</button>
+                <button class="filter-btn" data-filter="Filter_Date">Due Date</button>
+            </div>
+            <ul id="task-list">
+                </ul>
+        </div>
+
+        <div class="task-detail-panel">
+            <h2>Task Details</h2>
+            <div id="task-detail-content">
+                <p>Select a task to see details.</p>
+            </div>
+            <div id="task-detail-form" style="display:none;">
+                <input type="hidden" id="detail-task-id">
+                <div>
+                    <label for="detail-title">Title:</label>
+                    <input type="text" id="detail-title">
+                </div>
+                <div>
+                    <label for="detail-due">Due Date:</label>
+                    <input type="date" id="detail-due">
+                </div>
+                <div>
+                    <label for="detail-summary">Summary:</label>
+                    <textarea id="detail-summary"></textarea>
+                </div>
+                <div>
+                    <label>Urgency/Importance (UI):</label>
+                    <select id="detail-ui">
+                        <option value="0">---Uncategorized---</option>
+                        <option value="1">---Urgent + Important---</option>
+                        <option value="2">---Important + Not-Urgent---</option>
+                        <option value="3">---Urgent + Not-Important---</option>
+                        <option value="4">---Not-Urgent + Not-Important---</option>
+                    </select>
+                </div>
+                <button id="save-task-btn">Save Changes</button>
+                <button id="complete-task-btn">Mark as Complete</button>
+            </div>
+
+            <div class="msl-log-panel">
+                <h3>MSL Log</h3>
+                <div id="msl-log-entries">
+                    </div>
+                <div id="add-msl-entry-form" style="display:none;">
+                    <textarea id="new-msl-text" placeholder="Add new MSL entry..."></textarea>
+                    <button id="add-msl-btn">Add Entry</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
