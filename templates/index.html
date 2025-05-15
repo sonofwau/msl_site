@@ -16,21 +16,27 @@
 
     <div class="app-container">
         <div class="task-list-panel">
-            <h2>Tasks</h2>
-            <div class="task-actions">
+            <h2>Tasks</h2> <div class="task-actions">
                 <input type="text" id="new-task-title" placeholder="New Task Title">
                 <button id="add-task-btn">Add Task</button>
             </div>
+
+            <div class="view-toggle-buttons">
+                <button id="view-active-tasks-btn" class="view-toggle-btn active-view">View Active Tasks</button>
+                <button id="view-completed-tasks-btn" class="view-toggle-btn">View Completed Tasks</button>
+            </div>
+
             <div class="task-filters">
                 Sort/Filter by:
                 <button class="filter-btn" data-filter="Filter_UI">Urgency/Importance</button>
                 <button class="filter-btn" data-filter="Filter_Date">Due Date</button>
             </div>
+
+            <h3 id="task-list-title">Active Tasks</h3>
+
             <ul id="task-list">
                 </ul>
-        </div>
-
-        <div class="task-detail-panel">
+        </div> <div class="task-detail-panel">
             <h2>Task Details</h2>
             <div id="task-detail-content">
                 <p>Select a task to see details.</p>
@@ -72,9 +78,6 @@
                     <button id="add-msl-btn">Add Entry</button>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+        </div> </div> <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
