@@ -1,4 +1,4 @@
-# flask_app.py
+# app.py
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g
 import mysql.connector
@@ -13,14 +13,7 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24) # Strong secret key for sessions
 
 # --- MySQL Configuration ---
-# IMPORTANT: Store these securely, e.g., environment variables or a config file
-DB_CONFIG = {
-    'user': 'sonofwau',
-    'password': 'lolno',
-    'host': 'sonofwau.mysql.pythonanywhere-services.com', # e.g., 'yourusername.mysql.pythonanywhere-services.com'
-    'database': 'sonofwau$insert_db_name', # Create this database in MySQL
-    'raise_on_warnings': True
-}
+from msl_app_db_config import DB_CONFIG
 
 # --- Database Helper Functions ---
 def get_db():
@@ -211,17 +204,16 @@ def get_current_user_fullname():
 # (Adapted from your PowerShell script logic for get_tasks_data, get_msl_entries_data)
 # These functions will now use MySQL queries and refer to the logged-in user from session.
 
-def get_tasks_logic(creator_username, filter_property="Filter_UI"): # Add creator_username parameter
-    # Filter by logged-in user's tasks that are active (State = 1)
-    # The %s placeholder will be filled by the creator_username
-    sql_query = "SELECT * FROM Tasks WHERE State = 1 AND Creator_Username = %s"
-    args = (creator_username,) # Arguments for the SQL query
+def get_tasks_logic(creator_username, task_state=1, filter_property="Filter_UI"):
+    # Filter by logged-in user's tasks based on the provided state
+    sql_query = "SELECT * FROM Tasks WHERE State = %s AND Creator_Username = %s"
+    args = (task_state, creator_username,) # Arguments for the SQL query
 
-    tasks_from_db = query_db(sql_query, args) # This now only fetches tasks for the given creator
+    tasks_from_db = query_db(sql_query, args)
 
     processed_tasks = []
-
-    for task in tasks_from_db: # Iterate over the user-specific tasks
+    # ... (the rest of the processing logic for UI text, date text, datetime conversion remains the same)
+    for task in tasks_from_db:
         # UI Filter Text
         ui_val = task.get("UI")
         if ui_val == 1: task["Filter_UI_Text"] = "---Urgent + Important---"
@@ -232,8 +224,12 @@ def get_tasks_logic(creator_username, filter_property="Filter_UI"): # Add creato
 
         # Date Filter Text
         due_date = task.get("Due")
-        time_val = "---Later---"
-        if isinstance(due_date, datetime):
+        time_val = "---Later---" # Default for active tasks
+        if task_state == 0: # For completed tasks
+            time_val = "---Completed---" # Or use Date_Closed if you want more specific info
+            if task.get("Date_Closed") and isinstance(task.get("Date_Closed"), datetime):
+                time_val = f"---Completed: {task['Date_Closed'].strftime('%Y-%m-%d')}---"
+        elif isinstance(due_date, datetime): # Only calculate for active tasks if needed
             time_span = due_date - datetime.now()
             total_days_float = time_span.total_seconds() / (24 * 60 * 60)
 
@@ -250,12 +246,19 @@ def get_tasks_logic(creator_username, filter_property="Filter_UI"): # Add creato
         processed_tasks.append(task)
 
     # Sorting logic (applied to the user-specific, processed tasks)
+    # For completed tasks, sorting by 'Filter_Date_Text' might be less relevant
+    # or might need a different sort order if you use the completion date.
+    # For simplicity, we'll keep the existing sort logic for now.
     if filter_property == "Filter_UI":
         custom_sort_order = ["---Urgent + Important---", "---Important + Not-Urgent---", "---Urgent + Not-Important---", "---Uncategorized---", "---Not-Urgent + Not-Important---"]
         processed_tasks.sort(key=lambda t: custom_sort_order.index(t["Filter_UI_Text"]) if t["Filter_UI_Text"] in custom_sort_order else len(custom_sort_order))
     elif filter_property == "Filter_Date":
-        custom_sort_order = ["---Overdue---", "---Today---", "---This Week---", "---Next Week---", "---Later---"]
-        processed_tasks.sort(key=lambda t: custom_sort_order.index(t["Filter_Date_Text"]) if t["Filter_Date_Text"] in custom_sort_order else len(custom_sort_order))
+        # Adjust sort order if needed for completed tasks
+        if task_state == 0: # Example: if you want completed tasks sorted differently by date
+             processed_tasks.sort(key=lambda t: t.get("Date_Closed") or '', reverse=True) # Sort by completion date, newest first
+        else:
+            custom_sort_order = ["---Overdue---", "---Today---", "---This Week---", "---Next Week---", "---Later---"]
+            processed_tasks.sort(key=lambda t: custom_sort_order.index(t["Filter_Date_Text"]) if t["Filter_Date_Text"] in custom_sort_order else len(custom_sort_order))
 
     return processed_tasks
 
@@ -275,18 +278,14 @@ def index():
     return render_template('index.html', username=get_current_user_username())
 
 @app.route('/api/tasks', methods=['GET'])
-@login_required # Ensures only logged-in users can access
+@login_required
 def api_get_tasks():
     filter_prop = request.args.get('filter_by', 'Filter_UI')
-    current_username = get_current_user_username() # Get username from session
-
+    current_username = get_current_user_username()
     if not current_username:
-        # This case should ideally be prevented by @login_required,
-        # but it's good for robustness if session somehow gets an issue.
         return jsonify({"error": "Authentication required to view tasks."}), 401
-
-    # Pass the current_username to get_tasks_logic
-    tasks = get_tasks_logic(creator_username=current_username, filter_property=filter_prop)
+    # Explicitly passing task_state=1 for active tasks
+    tasks = get_tasks_logic(creator_username=current_username, task_state=1, filter_property=filter_prop)
     return jsonify(tasks)
 
 @app.route('/api/task', methods=['POST'])
@@ -384,6 +383,17 @@ def api_complete_task(task_id):
     except mysql.connector.Error as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/tasks/completed', methods=['GET'])
+@login_required
+def api_get_completed_tasks():
+    filter_prop = request.args.get('filter_by', 'Filter_UI') # Allow filtering/sorting for completed too
+    current_username = get_current_user_username()
+    if not current_username:
+        return jsonify({"error": "Authentication required to view completed tasks."}), 401
+    # Call get_tasks_logic with task_state=0 for completed tasks
+    tasks = get_tasks_logic(creator_username=current_username, task_state=0, filter_property=filter_prop)
+    return jsonify(tasks)
+
 @app.route('/api/msl_entries/<task_id>', methods=['GET'])
 @login_required
 def api_get_msl_entries(task_id):
@@ -434,4 +444,4 @@ if __name__ == '__main__':
         print("Please ensure MySQL is running, the database exists, and user has permissions, or that the app can create the database.")
         # sys.exit(1) # Optionally exit if DB setup fails
 
-    app.run(debug=True) # debug=True is for development onl
+    app.run(debug=True) # debug=True is for development only
