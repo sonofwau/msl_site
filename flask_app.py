@@ -211,16 +211,17 @@ def get_current_user_fullname():
 # (Adapted from your PowerShell script logic for get_tasks_data, get_msl_entries_data)
 # These functions will now use MySQL queries and refer to the logged-in user from session.
 
-def get_tasks_logic(filter_property="Filter_UI"):
-    # Filter by logged-in user, or show all if admin (not implemented here)
-    # For simplicity, let's assume users see tasks they created or are assigned to (not in original schema)
-    # The original script didn't filter tasks by user, just showed all active.
-    # We will keep that for now, but Creator_Username and Closor_Username are available.
+def get_tasks_logic(creator_username, filter_property="Filter_UI"): # Add creator_username parameter
+    # Filter by logged-in user's tasks that are active (State = 1)
+    # The %s placeholder will be filled by the creator_username
+    sql_query = "SELECT * FROM Tasks WHERE State = 1 AND Creator_Username = %s"
+    args = (creator_username,) # Arguments for the SQL query
 
-    tasks = query_db("SELECT * FROM Tasks WHERE State = 1") # State = 1 for active
+    tasks_from_db = query_db(sql_query, args) # This now only fetches tasks for the given creator
+
     processed_tasks = []
 
-    for task in tasks:
+    for task in tasks_from_db: # Iterate over the user-specific tasks
         # UI Filter Text
         ui_val = task.get("UI")
         if ui_val == 1: task["Filter_UI_Text"] = "---Urgent + Important---"
@@ -230,22 +231,16 @@ def get_tasks_logic(filter_property="Filter_UI"):
         else: task["Filter_UI_Text"] = "---Uncategorized---"
 
         # Date Filter Text
-        due_date = task.get("Due") # This will be a datetime object from MySQL connector
+        due_date = task.get("Due")
         time_val = "---Later---"
         if isinstance(due_date, datetime):
             time_span = due_date - datetime.now()
+            total_days_float = time_span.total_seconds() / (24 * 60 * 60)
 
-            # Calculate total days as a float
-            total_days_float = time_span.total_seconds() / (24 * 60 * 60) # or time_span.total_seconds() / 86400.0
-
-            if total_days_float < 0: # Use total_days_float for comparison
-                time_val = "---Overdue---"
-            elif 0 <= total_days_float <= 1: # Use total_days_float
-                time_val = "---Today---"
-            elif 1 < total_days_float <= 7: # Use total_days_float
-                time_val = "---This Week---"
-            elif 7 < total_days_float <= 14: # Use total_days_float
-                time_val = "---Next Week---"
+            if total_days_float < 0: time_val = "---Overdue---"
+            elif 0 <= total_days_float <= 1: time_val = "---Today---"
+            elif 1 < total_days_float <= 7: time_val = "---This Week---"
+            elif 7 < total_days_float <= 14: time_val = "---Next Week---"
         task["Filter_Date_Text"] = time_val
 
         # Convert datetime objects to ISO strings for JSON serialization
@@ -254,7 +249,7 @@ def get_tasks_logic(filter_property="Filter_UI"):
                 task[key] = value.isoformat()
         processed_tasks.append(task)
 
-    # Sorting logic (same as before, but applied to dicts from MySQL)
+    # Sorting logic (applied to the user-specific, processed tasks)
     if filter_property == "Filter_UI":
         custom_sort_order = ["---Urgent + Important---", "---Important + Not-Urgent---", "---Urgent + Not-Important---", "---Uncategorized---", "---Not-Urgent + Not-Important---"]
         processed_tasks.sort(key=lambda t: custom_sort_order.index(t["Filter_UI_Text"]) if t["Filter_UI_Text"] in custom_sort_order else len(custom_sort_order))
@@ -280,10 +275,18 @@ def index():
     return render_template('index.html', username=get_current_user_username())
 
 @app.route('/api/tasks', methods=['GET'])
-@login_required
+@login_required # Ensures only logged-in users can access
 def api_get_tasks():
     filter_prop = request.args.get('filter_by', 'Filter_UI')
-    tasks = get_tasks_logic(filter_property=filter_prop)
+    current_username = get_current_user_username() # Get username from session
+
+    if not current_username:
+        # This case should ideally be prevented by @login_required,
+        # but it's good for robustness if session somehow gets an issue.
+        return jsonify({"error": "Authentication required to view tasks."}), 401
+
+    # Pass the current_username to get_tasks_logic
+    tasks = get_tasks_logic(creator_username=current_username, filter_property=filter_prop)
     return jsonify(tasks)
 
 @app.route('/api/task', methods=['POST'])
@@ -431,4 +434,4 @@ if __name__ == '__main__':
         print("Please ensure MySQL is running, the database exists, and user has permissions, or that the app can create the database.")
         # sys.exit(1) # Optionally exit if DB setup fails
 
-    app.run(debug=True) # debug=True is for development only
+    app.run(debug=True) # debug=True is for development onl
