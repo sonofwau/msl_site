@@ -33,3 +33,9 @@ button:hover { background-color: #4cae4c; }
 .msl-entry .text { margin-top: 4px; }
 
 #task-detail-form div, #add-msl-entry-form div { margin-bottom:10px; }
+
+.view-toggle-btn.active-view {
+    background-color: #0056b3; /* Darker blue for active view */
+    font-weight: bold;
+}
+.view-toggle-buttons button { margin-bottom: 10px; }
